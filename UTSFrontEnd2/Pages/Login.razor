@@ -1,0 +1,50 @@
+﻿@page "/login"
+@using UTSFrontEnd2.Services
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+
+<h3>Login</h3>
+
+<EditForm Model="@loginModel" OnValidSubmit="HandleLogin">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label>Username:</label>
+        <InputText @bind-Value="loginModel.Username" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label>Password:</label>
+        <InputText @bind-Value="loginModel.Password" InputType="password" class="form-control" />
+    </div>
+    <button type="submit" class="btn btn-primary">Login</button>
+</EditForm>
+
+@if (loginError != null)
+{
+    <p style="color:red">@loginError</p>
+}
+
+@code {
+    private LoginModel loginModel = new();
+    private string? loginError;
+
+    private async Task HandleLogin()
+    {
+        var success = await AuthService.Login(loginModel.Username, loginModel.Password);
+        if (success)
+        {
+            NavigationManager.NavigateTo("/");
+        }
+        else
+        {
+            loginError = "Login failed. Please check your credentials.";
+        }
+    }
+
+    public class LoginModel
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

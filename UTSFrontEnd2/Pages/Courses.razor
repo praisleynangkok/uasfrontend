@@ -1,0 +1,202 @@
+﻿@page "/courses"
+@using System.Text.Json
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@inject EnrollmentService EnrollmentService
+@using UTSFrontEnd2.Models
+@using UTSFrontEnd2.Services
+
+<div class="container">
+    <h3>Courses</h3>
+
+    <!-- Form Input untuk menambahkan kursus baru -->
+    <div class="input-group">
+        <input type="text" class="form-control" @bind="newCourseName" placeholder="Enter course name" />
+        <select class="form-control" @bind="selectedCategoryId">
+            <option value="0">Select Category</option>
+            @foreach (var category in categories)
+            {
+                <option value="@category.Id">@category.Name</option>
+            }
+        </select>
+        <button class="btn btn-success" @onclick="CreateCourse">Create Course</button>
+    </div>
+
+    <!-- Form Pencarian -->
+    <div class="input-group mb-3">
+        <input type="text" class="form-control" @bind="searchTerm" placeholder="Search by Category or Course Name" />
+        <button class="btn btn-info" @onclick="SearchCourses">Search</button>
+    </div>
+
+    <!-- Daftar kursus -->
+    <ul>
+        @foreach (var course in filteredCourses)
+        {
+            <li>
+                <strong>@course.Name</strong> - @course.Category?.Name
+                <div>
+                    <button class="btn btn-warning btn-sm" @onclick="() => EditCourse(course)">Edit</button>
+                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteCourse(course)">Delete</button>
+                    <button class="btn btn-primary btn-sm" @onclick="() => EnrollInstructor(course.Id)">Enroll Instructor</button>
+                </div>
+            </li>
+        }
+    </ul>
+
+    <!-- Edit Form -->
+    @if (courseToEdit != null)
+    {
+        <div class="card mt-3">
+            <h4>Edit Course</h4>
+            <div class="input-group">
+                <input type="text" class="form-control" @bind="newCourseName" placeholder="Enter new course name" />
+                <select class="form-control" @bind="selectedCategoryId">
+                    <option value="0">Select Category</option>
+                    @foreach (var category in categories)
+                    {
+                        <option value="@category.Id">@category.Name</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-success mt-2" @onclick="SaveEditedCourse">Save</button>
+            <button class="btn btn-secondary mt-2 ms-2" @onclick="CancelEdit">Cancel</button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Course> courses = new();
+    private List<Category> categories = new();
+    private List<Course> filteredCourses = new();
+    private string newCourseName = string.Empty;
+    private int selectedCategoryId;
+    private string searchTerm = string.Empty;
+    private Course? courseToEdit;
+    private int instructorId = 1; // Default instructor ID
+
+    protected override async Task OnInitializedAsync()
+    {
+        Console.WriteLine("Navigated to: Courses Page");
+
+        // Load data kategori dari localStorage
+        var storedCategories = await JS.InvokeAsync<string>("localStorage.getItem", "categories");
+        categories = !string.IsNullOrEmpty(storedCategories)
+            ? JsonSerializer.Deserialize<List<Category>>(storedCategories) ?? new()
+            : new()
+                {
+                new Category { Id = 1, Name = "Programming" },
+                new Category { Id = 2, Name = "Design" }
+                };
+
+        // Load data kursus dari localStorage
+        var storedCourses = await JS.InvokeAsync<string>("localStorage.getItem", "courses");
+        courses = !string.IsNullOrEmpty(storedCourses)
+            ? JsonSerializer.Deserialize<List<Course>>(storedCourses) ?? new()
+            : new()
+                {
+                new Course { Id = 1, Name = "Web Development", CategoryId = 1, Category = categories.FirstOrDefault(c => c.Id == 1) },
+                new Course { Id = 2, Name = "UI/UX Design", CategoryId = 2, Category = categories.FirstOrDefault(c => c.Id == 2) }
+                };
+
+        filteredCourses = new List<Course>(courses);
+    }
+
+    private async Task CreateCourse()
+    {
+        if (string.IsNullOrWhiteSpace(newCourseName) || selectedCategoryId == 0)
+        {
+            Console.WriteLine("Invalid input for new course.");
+            return;
+        }
+
+        var selectedCategory = categories.FirstOrDefault(c => c.Id == selectedCategoryId);
+        if (selectedCategory != null)
+        {
+            var newCourse = new Course
+                {
+                    Id = courses.Count + 1,
+                    Name = newCourseName,
+                    Category = selectedCategory,
+                    CategoryId = selectedCategoryId
+                };
+            courses.Add(newCourse);
+            filteredCourses.Add(newCourse);
+            await SaveCourses();
+            newCourseName = string.Empty;
+            selectedCategoryId = 0;
+        }
+    }
+
+    private async Task DeleteCourse(Course course)
+    {
+        courses.Remove(course);
+        filteredCourses.Remove(course);
+        await SaveCourses();
+    }
+
+    private async Task SearchCourses()
+    {
+        if (string.IsNullOrEmpty(searchTerm))
+        {
+            filteredCourses = new List<Course>(courses);
+        }
+        else
+        {
+            filteredCourses = courses.Where(c =>
+                c.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (c.Category?.Name ?? string.Empty).Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        }
+    }
+
+    private void EditCourse(Course course)
+    {
+        courseToEdit = course;
+        newCourseName = course.Name;
+        selectedCategoryId = course.CategoryId;
+    }
+
+    private async Task SaveEditedCourse()
+    {
+        var course = courses.FirstOrDefault(c => c.Id == courseToEdit?.Id);
+        if (course != null)
+        {
+            course.Name = newCourseName;
+            course.CategoryId = selectedCategoryId;
+            course.Category = categories.FirstOrDefault(c => c.Id == selectedCategoryId);
+
+            filteredCourses = filteredCourses.Select(c => c.Id == courseToEdit?.Id ? course : c).ToList();
+
+            await SaveCourses();
+            courseToEdit = null;
+            newCourseName = string.Empty;
+            selectedCategoryId = 0;
+        }
+    }
+
+    private void CancelEdit()
+    {
+        courseToEdit = null;
+        newCourseName = string.Empty;
+        selectedCategoryId = 0;
+    }
+
+    private async Task SaveCourses()
+    {
+        var coursesJson = JsonSerializer.Serialize(courses);
+        await JS.InvokeAsync<object>("localStorage.setItem", "courses", coursesJson);
+    }
+
+    private async Task EnrollInstructor(int courseId)
+    {
+        var success = await EnrollmentService.EnrollInstructor(instructorId, courseId);
+        if (success)
+        {
+            Console.WriteLine($"Instructor {instructorId} successfully enrolled to Course {courseId}.");
+        }
+        else
+        {
+            Console.WriteLine($"Failed to enroll Instructor {instructorId} to Course {courseId}.");
+        }
+    }
+}

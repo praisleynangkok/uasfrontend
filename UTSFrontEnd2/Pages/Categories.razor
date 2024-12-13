@@ -1,0 +1,98 @@
+﻿@page "/categories"
+@inject IJSRuntime JS
+@using System.Text.Json
+@using UTSFrontEnd2.Models
+
+<h3>Categories</h3>
+
+<div class="input-group mb-3">
+    <input type="text" class="form-control" @bind="newCategoryName" placeholder="Enter category name" />
+    <button class="btn btn-success" @onclick="CreateCategory">Create Category</button>
+</div>
+
+<div class="category-list">
+    @foreach (var category in categories)
+    {
+        <div class="category-card">
+            @if (category.Id == categoryToEdit?.Id)
+            {
+                <input type="text" class="form-control" @bind="newCategoryName" />
+                <button class="btn btn-success btn-sm" @onclick="SaveEditedCategory">Save</button>
+                <button class="btn btn-secondary btn-sm" @onclick="CancelEdit">Cancel</button>
+            }
+            else
+            {
+                <h4>@category.Name</h4>
+                <div class="button-group">
+                    <button class="btn btn-warning btn-sm" @onclick="() => EditCategory(category)">Edit</button>
+                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteCategory(category)">Delete</button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Category> categories = new();
+    private string newCategoryName = string.Empty;
+    private Category? categoryToEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var storedCategories = await JS.InvokeAsync<string>("localStorage.getItem", "categories");
+        if (!string.IsNullOrEmpty(storedCategories))
+        {
+            categories = JsonSerializer.Deserialize<List<Category>>(storedCategories) ?? new List<Category>();
+        }
+    }
+
+    private async Task CreateCategory()
+    {
+        if (!string.IsNullOrWhiteSpace(newCategoryName) && !categories.Any(c => c.Name.Equals(newCategoryName, StringComparison.OrdinalIgnoreCase)))
+        {
+            var newCategory = new Category { Id = categories.Count + 1, Name = newCategoryName };
+            categories.Add(newCategory);
+            await SaveCategories();
+            newCategoryName = string.Empty;
+        }
+    }
+
+    private async Task DeleteCategory(Category category)
+    {
+        categories.Remove(category);
+        await SaveCategories();
+    }
+
+    private void EditCategory(Category category)
+    {
+        categoryToEdit = category;
+        newCategoryName = category.Name;
+    }
+
+    private async Task SaveEditedCategory()
+    {
+        if (categoryToEdit != null)
+        {
+            var category = categories.FirstOrDefault(c => c.Id == categoryToEdit.Id);
+            if (category != null)
+            {
+                category.Name = newCategoryName;
+                await SaveCategories();
+            }
+            categoryToEdit = null;
+            newCategoryName = string.Empty;
+        }
+    }
+
+    private void CancelEdit()
+    {
+        categoryToEdit = null;
+        newCategoryName = string.Empty;
+    }
+
+    private async Task SaveCategories()
+    {
+        var categoriesJson = JsonSerializer.Serialize(categories);
+        await JS.InvokeAsync<object>("localStorage.setItem", "categories", categoriesJson);
+    }
+}

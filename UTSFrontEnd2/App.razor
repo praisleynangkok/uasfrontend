@@ -1,0 +1,49 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager NavigationManager
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            <NotAuthorized>
+                @if (isAuthenticated)
+                {
+                    <p>You are not authorized to view this page.</p>
+                }
+                else
+                {
+                    <p>Redirecting to login...</p>
+                    <RedirectToLogin />
+                }
+            </NotAuthorized>
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <p>Sorry, there's nothing at this address.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; }
+
+    private bool isAuthenticated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateTask;
+        isAuthenticated = authState.User.Identity != null && authState.User.Identity.IsAuthenticated;
+    }
+
+    public class RedirectToLogin : ComponentBase
+    {
+        [Inject] private NavigationManager NavigationManager { get; set; }
+
+        protected override void OnInitialized()
+        {
+            NavigationManager.NavigateTo("/login", true);
+        }
+    }
+}
